@@ -1,13 +1,16 @@
-librarian::shelf(ggmap, raster, rgdal, rmapshaper, 
-                 broom, gpclib, viridis, sf)
+librarian::shelf(tidyverse, ggmap, raster, rgdal, rmapshaper, 
+                 broom, gpclib, viridis, sf, ggspatial)
 #install.packages("gpclib", type = "source")
 # https://kuduz.tistory.com/1042 
+# http://www.gisdeveloper.co.kr/?p=2332
 
 ### Make proper geocode ----
-korea_1 <- read_sf(here::here('data', 'CTPRVN_201602', 'TL_SCCO_CTPRVN.shp'))
-korea_2 <- read_sf(here::here('data', 'SIG_201602', 'TL_SCCO_SIG.shp'))
-korea_3 <- read_sf(here::here('data', 'EMD_201602', 'TL_SCCO_EMD.shp'))
-korea_4 <- read_sf(here::here('data', 'LI_201602', 'TL_SCCO_LI.shp'))
+### prj 파일이 있어야 한다! 
+
+korea_1 <- st_read(here::here('data', 'CTPRVN_201602', 'TL_SCCO_CTPRVN.shp'))
+korea_2 <- st_read(here::here('data', 'SIG_201602', 'TL_SCCO_SIG.shp'))
+#korea_3 <- st_read(here::here('data', 'EMD_201602', 'TL_SCCO_EMD.shp'))
+#korea_4 <- st_read(here::here('data', 'LI_201602', 'TL_SCCO_LI.shp'))
 
 cp_2_utf8 <- function(col){
   iconv(col, from = "CP949", to = "UTF-8", sub = NA, mark = TRUE, toRaw = FALSE)
@@ -23,28 +26,30 @@ gen_uppercode <- function(var1, var2, df1, df2, cut_from_right){
   enq_1 <- enquo(var1)
   enq_2 <- enquo(var2)
   chr_1 <- deparse(substitute(var1))
-  
+  df1$geometry <- NULL 
   df2 %>% 
     mutate(
       !!enq_1 := str_extract(!!enq_2, paste0("^.{",cut_from_right,"}"))
     ) %>% 
-    left_join(df1, by = chr_1)
+    left_join(
+      df1, by = chr_1
+    )
 }
 
 label_1 <- change_enc(CTP_KOR_NM, korea_1)
 label_2 <- change_enc(SIG_KOR_NM, korea_2)
-label_3 <- change_enc(EMD_KOR_NM, korea_3)
-label_4 <- change_enc(LI_KOR_NM, korea_4)
+#label_3 <- change_enc(EMD_KOR_NM, korea_3)
+#label_4 <- change_enc(LI_KOR_NM, korea_4)
 
 gen_uppercode(CTPRVN_CD, SIG_CD, label_1, label_2, 2) %>% 
   mutate(
     kor_name = str_remove(paste0(CTP_KOR_NM, SIG_KOR_NM), " ")
-  ) %>% 
-  select(SIG_CD, kor_name) -> df0
+  ) -> df0
 
 ### Prepare sample_shp files 
-kor_sample_shp <- ms_simplify(korea_2, keep = 0.005, keep_shapes = F)
-tidy(kor_sample_shp, region = 'SIG_CD') -> df1
+df_sf <- ms_simplify(df0, keep = 0.0025, keep_shapes = F)
+st_crs(df_sf) 
+df_sf <- st_transform(df_sf, 3857)
 
 ### Read rds ----
 readRDS(here::here('data', 'LQEI.rds')) %>% 
@@ -52,40 +57,57 @@ readRDS(here::here('data', 'LQEI.rds')) %>%
     kor_name = if_else(si_do_1==si_do_2, 
                        paste0(si_do_1, gu_gun), 
                        paste0(si_do_1, si_do_2, gu_gun))
-  ) -> df2 
-
-df2 %>% 
-  left_join(
-    df0 %>% select(SIG_CD, kor_name), by = c('kor_name')
-  )  -> df2
-
-df2 %>% 
+  ) %>% 
   mutate(
     index_jobqual = as.numeric(index_jobqual)
-  )-> df2
+  )-> df2 
 
-df2 %>% left_join(df1, by = c('SIG_CD'='id')) -> df3 
+df_sf %>% 
+  left_join(df2, by = c("kor_name")) -> df_sf2
 
-ggplot() + 
-geom_sf(data = df3,  aes(fill = index_jobqual))
+### Gen map from Google 
+register_google(key = 'AIzaSyA-8v4SGqGyLAGxBOK8-hhWvUe_ove00-w')
+map <- get_map(location='south korea', zoom=7, maptype='roadmap', color='bw')
+ggmap(map)  # Check maps 
+ggmap_bbox <- function(map) {
+  if (!inherits(map, "ggmap")) stop("map must be a ggmap object")
+  # Extract the bounding box (in lat/lon) from the ggmap to a numeric vector, 
+  # and set the names to what sf::st_bbox expects:
+  map_bbox <- setNames(unlist(attr(map, "bb")), 
+                       c("ymin", "xmin", "ymax", "xmax"))
+  
+  # Coonvert the bbox to an sf polygon, transform it to 3857, 
+  # and convert back to a bbox (convoluted, but it works)
+  bbox_3857 <- st_bbox(st_transform(st_as_sfc(st_bbox(map_bbox, crs = 4326)), 3857))
+  
+  # Overwrite the bbox of the ggmap object with the transformed coordinates 
+  attr(map, "bb")$ll.lat <- bbox_3857["ymin"]
+  attr(map, "bb")$ll.lon <- bbox_3857["xmin"]
+  attr(map, "bb")$ur.lat <- bbox_3857["ymax"]
+  attr(map, "bb")$ur.lon <- bbox_3857["xmax"]
+  map
+}
+map <- ggmap_bbox(map)
 
-p
-
-p + 
+ggmap(map) + 
+  coord_sf(crs = st_crs(3857)) +
+  geom_sf(data = df_sf2, aes(fill = index_jobqual), alpha=0.3, inherit.aes = FALSE) + 
   scale_fill_viridis(direction=-1) + 
-  theme_void() + 
-  theme(legend.position="left")
+  theme_void() + labs(fill = "JQ index")
+  
+
+df_sf2 %>% 
+  filter(
+    si_do_1 == "서울특별시"
+  ) -> df_seoul 
 
 register_google(key = 'AIzaSyA-8v4SGqGyLAGxBOK8-hhWvUe_ove00-w')
+map <- get_map(location='seoul', zoom=11, maptype='roadmap', color='bw')
+ggmap(map)  # Check maps 
+map <- ggmap_bbox(map)
 
-map <- get_map(location='south korea', zoom=7, maptype='roadmap', color='bw')
-
-ggmap(map) +  
-  geom_polygon(data=df3, aes(x=long, y=lat, group=group, fill=index_jobqual), alpha=.75) + scale_fill_viridis(direction=-1) + theme_void() + guides(fill=F)
-
-### sf 
-
-korea_2 <- read_sf(here::here('data', 'SIG_201602', 'TL_SCCO_SIG.shp'))
-simple_2 <- ms_simplify(korea_2, keep = 0.0025, keep_shapes = F)
-ggplot() + 
-  geom_sf(data = simple_2)
+ggmap(map) + 
+  coord_sf(crs = st_crs(3857)) +
+  geom_sf(data = df_seoul, aes(fill = index_jobqual), alpha=0.3, inherit.aes = FALSE) + 
+  scale_fill_viridis(direction=-1) + 
+  theme_void() + labs(fill = "JQ index")
