@@ -66,48 +66,46 @@ df_sf %>%
   left_join(df2, by = c("kor_name")) -> df_sf2
 
 ### Gen map from Google 
-register_google(key = 'AIzaSyA-8v4SGqGyLAGxBOK8-hhWvUe_ove00-w')
-map <- get_map(location='south korea', zoom=7, maptype='roadmap', color='bw')
-ggmap(map)  # Check maps 
+
+my_key <- 'AIzaSyA-8v4SGqGyLAGxBOK8-hhWvUe_ove00-w'
+register_google(key = my_key)
+map <- get_map(location='south korea', zoom=4, maptype='roadmap', color='bw')
 ggmap_bbox <- function(map) {
-  if (!inherits(map, "ggmap")) stop("map must be a ggmap object")
-  # Extract the bounding box (in lat/lon) from the ggmap to a numeric vector, 
-  # and set the names to what sf::st_bbox expects:
-  map_bbox <- setNames(unlist(attr(map, "bb")), 
-                       c("ymin", "xmin", "ymax", "xmax"))
-  
-  # Coonvert the bbox to an sf polygon, transform it to 3857, 
-  # and convert back to a bbox (convoluted, but it works)
-  bbox_3857 <- st_bbox(st_transform(st_as_sfc(st_bbox(map_bbox, crs = 4326)), 3857))
-  
-  # Overwrite the bbox of the ggmap object with the transformed coordinates 
-  attr(map, "bb")$ll.lat <- bbox_3857["ymin"]
-  attr(map, "bb")$ll.lon <- bbox_3857["xmin"]
-  attr(map, "bb")$ur.lat <- bbox_3857["ymax"]
-  attr(map, "bb")$ur.lon <- bbox_3857["xmax"]
-  map
-}
+    if (!inherits(map, "ggmap")) stop("map must be a ggmap object")
+    # Extract the bounding box (in lat/lon) from the ggmap to a numeric vector, 
+    # and set the names to what sf::st_bbox expects:
+    map_bbox <- setNames(unlist(attr(map, "bb")), 
+                         c("ymin", "xmin", "ymax", "xmax"))
+    
+    # Coonvert the bbox to an sf polygon, transform it to 3857, 
+    # and convert back to a bbox (convoluted, but it works)
+    bbox_3857 <- st_bbox(st_transform(st_as_sfc(st_bbox(map_bbox, crs = 4326)), 3857))
+    
+    # Overwrite the bbox of the ggmap object with the transformed coordinates 
+    attr(map, "bb")$ll.lat <- bbox_3857["ymin"]
+    attr(map, "bb")$ll.lon <- bbox_3857["xmin"]
+    attr(map, "bb")$ur.lat <- bbox_3857["ymax"]
+    attr(map, "bb")$ur.lon <- bbox_3857["xmax"]
+    map
+  }
 map <- ggmap_bbox(map)
 
 ggmap(map) + 
   coord_sf(crs = st_crs(3857)) +
-  geom_sf(data = df_sf2, aes(fill = index_jobqual), alpha=0.3, inherit.aes = FALSE) + 
+  geom_sf(data = df_sf2, 
+          aes(fill = index_jobqual), alpha=0.3, inherit.aes = FALSE) + 
   scale_fill_viridis(direction=-1) + 
   theme_void() + labs(fill = "JQ index")
-  
 
-df_sf2 %>% 
-  filter(
-    si_do_1 == "서울특별시"
-  ) -> df_seoul 
-
-register_google(key = 'AIzaSyA-8v4SGqGyLAGxBOK8-hhWvUe_ove00-w')
-map <- get_map(location='seoul', zoom=11, maptype='roadmap', color='bw')
-ggmap(map)  # Check maps 
+my_key <- 'AIzaSyA-8v4SGqGyLAGxBOK8-hhWvUe_ove00-w'
+register_google(key = my_key)
+map <- get_map(location='seoul', zoom=9, maptype='roadmap', color='bw')
 map <- ggmap_bbox(map)
 
 ggmap(map) + 
   coord_sf(crs = st_crs(3857)) +
-  geom_sf(data = df_seoul, aes(fill = index_jobqual), alpha=0.3, inherit.aes = FALSE) + 
+  geom_sf(data = df_sf2 %>% filter(si_do_1 %in% c('서울특별시', '경기도')), 
+          aes(fill = index_jobqual), alpha=0.3, inherit.aes = FALSE) + 
   scale_fill_viridis(direction=-1) + 
   theme_void() + labs(fill = "JQ index")
+

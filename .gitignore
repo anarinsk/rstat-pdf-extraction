@@ -3,7 +3,7 @@
 *.csv 
 *.xls
 *.xlsx
-data/ 
+#data/ 
 .DS_Store
 
 ###

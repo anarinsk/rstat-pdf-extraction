@@ -2,7 +2,9 @@
 librarian::shelf(tidyverse, ropensci/tabulizer, tidyr, xlsx)
 
 ### Load df 
-df <- extract_tables(here::here('data','leif.pdf'), guess=T, skip=2, output="data.frame") 
+df <- extract_tables(here::here('data','LQEI.pdf'), 
+                     guess=F, skip=2, 
+                     output="data.frame") 
 
 mynames <-c('si_do_1', 'si_do_2', 'gu_gun',
             'shr_highincome', 'shr_higheducated', 'shr_highskilled', 
