@@ -1,15 +1,24 @@
 ### Initial 
 librarian::shelf(tidyverse, tidyr)
 
-### Load df 
+###
+### Load df for macos, linux 
 read.delim(file=here::here('data', 'LQEI.txt'),
-           header=F,  
+           header=F,
            #skip=1, 
-           #sep = " ", 
            #fill = T, 
-           encoding='UTF-8'
+           encoding='UTF-8', 
+           stringsAsFactors = F
            #Other settings
-) %>% slice(-1) -> df0
+) -> df0
+
+### Load df for windows 
+
+readLines(here::here('data', 'LQEI.txt'), 
+          encoding='UTF-8'
+          ) %>% 
+  tibble(.) %>% 
+  slice(-c(1:6)) -> df0
 
 mynames <-c('si_do_1', 'si_do_2', 'gu_gun',
             'shr_highincome', 'shr_higheducated', 'shr_highskilled', 
@@ -40,9 +49,14 @@ merge_split <- function(vdf, colnames=mynames){
    vdf4 %>% dplyr::select(1:3, 9:13) %>% mutate(year = 2015) -> vdf6
    names(vdf5) <- colnames
    names(vdf6) <- colnames
-   bind_rows(vdf5, vdf6)
+   bind_rows(vdf5, vdf6) %>% 
+     mutate_at(vars(contains("shr")), 
+               ~as.numeric(.)) %>% 
+     mutate_at(vars(contains("index")), 
+               ~as.numeric(.))
 #
 }
+
 merge_split(df0) -> df1
 
 ### Save rds & csv----

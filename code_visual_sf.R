@@ -1,5 +1,5 @@
 librarian::shelf(tidyverse, ggmap, raster, rgdal, rmapshaper, 
-                 broom, gpclib, viridis, sf, ggspatial)
+                 broom, gpclib, viridis, sf, ggspatial, rgeos)
 #install.packages("gpclib", type = "source")
 # https://kuduz.tistory.com/1042 
 # http://www.gisdeveloper.co.kr/?p=2332
@@ -41,15 +41,23 @@ label_2 <- change_enc(SIG_KOR_NM, korea_2)
 #label_3 <- change_enc(EMD_KOR_NM, korea_3)
 #label_4 <- change_enc(LI_KOR_NM, korea_4)
 
+df_view <- label_1
+df_view$geometry <- NULL 
+df_view %>% View(.)
+
 gen_uppercode(CTPRVN_CD, SIG_CD, label_1, label_2, 2) %>% 
   mutate(
     kor_name = str_remove(paste0(CTP_KOR_NM, SIG_KOR_NM), " ")
-  ) -> df0
+  ) -> df_sf0
+
 
 ### Prepare sample_shp files 
-df_sf <- ms_simplify(df0, keep = 0.0025, keep_shapes = F)
+df_sf <- ms_simplify(df_sf0, keep = 0.0025, keep_shapes = T)
 st_crs(df_sf) 
 df_sf <- st_transform(df_sf, 3857)
+
+saveRDS(df_sf0, here::here('data', 'df_sf0.rds')) 
+saveRDS(df_sf, here::here('data', 'df_sf.rds')) 
 
 ### Read rds ----
 readRDS(here::here('data', 'LQEI.rds')) %>% 
@@ -63,13 +71,15 @@ readRDS(here::here('data', 'LQEI.rds')) %>%
   )-> df2 
 
 df_sf %>% 
-  left_join(df2, by = c("kor_name")) -> df_sf2
+  left_join(df2, by = c("kor_name")) %>% 
+  filter(year == 2015) -> df_sf2
 
 ### Gen map from Google 
 
 my_key <- 'AIzaSyA-8v4SGqGyLAGxBOK8-hhWvUe_ove00-w'
 register_google(key = my_key)
-map <- get_map(location='south korea', zoom=4, maptype='roadmap', color='bw')
+map <- get_map(location='south korea', zoom=7, maptype='roadmap', color='bw')
+ggmap(map)  + labs(x = NULL, y = NULL) # Check size 
 ggmap_bbox <- function(map) {
     if (!inherits(map, "ggmap")) stop("map must be a ggmap object")
     # Extract the bounding box (in lat/lon) from the ggmap to a numeric vector, 
@@ -99,13 +109,16 @@ ggmap(map) +
 
 my_key <- 'AIzaSyA-8v4SGqGyLAGxBOK8-hhWvUe_ove00-w'
 register_google(key = my_key)
-map <- get_map(location='seoul', zoom=9, maptype='roadmap', color='bw')
+map <- get_map(location='seoul', zoom=11, maptype='roadmap', color='bw')
+ggmap(map) + labs(x = NULL, y = NULL) # Check size 
 map <- ggmap_bbox(map)
 
 ggmap(map) + 
   coord_sf(crs = st_crs(3857)) +
-  geom_sf(data = df_sf2 %>% filter(si_do_1 %in% c('서울특별시', '경기도')), 
+  geom_sf(data = df_sf2 %>% filter(si_do_1 %in% c('서울특별시')), 
           aes(fill = index_jobqual), alpha=0.3, inherit.aes = FALSE) + 
   scale_fill_viridis(direction=-1) + 
   theme_void() + labs(fill = "JQ index")
 
+
+saveRDS(sf_df2, here::here('data', 'sf_df2.rds'))
